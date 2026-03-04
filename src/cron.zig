@@ -1642,6 +1642,18 @@ pub fn cliResumeJob(allocator: std.mem.Allocator, id: []const u8) !void {
     }
 }
 
+fn resolveRunnableCwd(cwd_opt: ?[]const u8) ?[]const u8 {
+    const cwd = cwd_opt orelse return null;
+    if (cwd.len == 0) return null;
+
+    if (std.fs.path.isAbsolute(cwd)) {
+        std.fs.accessAbsolute(cwd, .{}) catch return null;
+    } else {
+        std.fs.cwd().access(cwd, .{}) catch return null;
+    }
+    return cwd;
+}
+
 pub fn cliRunJob(allocator: std.mem.Allocator, id: []const u8) !void {
     var cfg_opt: ?Config = Config.load(allocator) catch null;
     defer if (cfg_opt) |*cfg| cfg.deinit();
@@ -1653,6 +1665,10 @@ pub fn cliRunJob(allocator: std.mem.Allocator, id: []const u8) !void {
         scheduler.setAgentTimeoutSecs(cfg.scheduler.agent_timeout_secs);
     }
     try loadJobs(&scheduler);
+    const run_cwd = resolveRunnableCwd(scheduler.shell_cwd);
+    if (scheduler.shell_cwd != null and run_cwd == null) {
+        log.warn("Cron shell cwd is unavailable; falling back to process cwd for manual run.", .{});
+    }
 
     if (scheduler.getMutableJob(id)) |job| {
         log.info("Running job '{s}': {s}", .{ id, job.command });
@@ -1662,7 +1678,7 @@ pub fn cliRunJob(allocator: std.mem.Allocator, id: []const u8) !void {
                 const result = std.process.Child.run(.{
                     .allocator = allocator,
                     .argv = &.{ platform.getShell(), platform.getShellFlag(), job.command },
-                    .cwd = scheduler.shell_cwd,
+                    .cwd = run_cwd,
                 }) catch |err| {
                     job.last_run_secs = run_at;
                     job.last_status = "error";
@@ -1684,7 +1700,7 @@ pub fn cliRunJob(allocator: std.mem.Allocator, id: []const u8) !void {
             },
             .agent => {
                 const prompt = job.prompt orelse job.command;
-                const result = runAgentJob(allocator, scheduler.shell_cwd, prompt, job.model, scheduler.agent_timeout_secs) catch |err| {
+                const result = runAgentJob(allocator, run_cwd, prompt, job.model, scheduler.agent_timeout_secs) catch |err| {
                     job.last_run_secs = run_at;
                     job.last_status = "error";
                     try saveJobs(&scheduler);
@@ -2031,6 +2047,17 @@ test "cliRunJob persists last status and timestamp" {
     try std.testing.expect(loaded_job.last_run_secs != null);
     try std.testing.expect(loaded_job.last_status != null);
     try std.testing.expectEqualStrings("ok", loaded_job.last_status.?);
+}
+
+test "resolveRunnableCwd keeps valid cwd" {
+    const resolved = resolveRunnableCwd(".");
+    try std.testing.expect(resolved != null);
+    try std.testing.expectEqualStrings(".", resolved.?);
+}
+
+test "resolveRunnableCwd returns null for missing cwd" {
+    const resolved = resolveRunnableCwd("__nullclaw_missing_cwd_for_cron_tests__/subdir");
+    try std.testing.expect(resolved == null);
 }
 
 test "reloadJobs auto-recovers malformed store and keeps runtime jobs" {
