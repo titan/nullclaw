@@ -269,6 +269,7 @@ pub const SecurityPolicy = struct {
     /// Record an action and check if the rate limit has been exceeded.
     /// Returns true if the action is allowed, false if rate-limited.
     pub fn recordAction(self: *const SecurityPolicy) !bool {
+        if (self.autonomy == .godmode) return true;
         if (self.tracker) |tracker| {
             return tracker.recordAction();
         }
@@ -277,6 +278,7 @@ pub const SecurityPolicy = struct {
 
     /// Check if the rate limit would be exceeded without recording.
     pub fn isRateLimited(self: *const SecurityPolicy) bool {
+        if (self.autonomy == .godmode) return false;
         if (self.tracker) |tracker| {
             return tracker.isLimited();
         }
@@ -1628,4 +1630,27 @@ test "godmode validateCommandExecution returns low for all commands" {
 test "godmode canAct returns true" {
     const p = SecurityPolicy{ .autonomy = .godmode };
     try std.testing.expect(p.canAct());
+}
+
+test "godmode recordAction bypasses rate limiting" {
+    var tracker = RateTracker.init(std.testing.allocator, 1);
+    defer tracker.deinit();
+    var p = SecurityPolicy{
+        .autonomy = .godmode,
+        .tracker = &tracker,
+    };
+    try std.testing.expect(try p.recordAction());
+    try std.testing.expect(try p.recordAction());
+    try std.testing.expect(try p.recordAction());
+}
+
+test "godmode isRateLimited always false" {
+    var tracker = RateTracker.init(std.testing.allocator, 1);
+    defer tracker.deinit();
+    var p = SecurityPolicy{
+        .autonomy = .godmode,
+        .tracker = &tracker,
+    };
+    _ = try tracker.recordAction();
+    try std.testing.expect(p.isRateLimited() == false);
 }
