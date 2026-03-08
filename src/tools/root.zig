@@ -753,8 +753,8 @@ test "all tools includes extras when enabled" {
     // Order: shell, file_read, file_write, file_edit, git, image_info,
     //        memory_store, memory_recall, memory_list, memory_forget,
     //        delegate, schedule, spawn, pushover, http_request, web_search,
-    //        web_fetch, browser = 18
-    try std.testing.expectEqual(@as(usize, 18), tools.len);
+    //        web_fetch, browser, message = 19
+    try std.testing.expectEqual(@as(usize, 19), tools.len);
 }
 
 test "all tools excludes extras when disabled" {
@@ -763,8 +763,8 @@ test "all tools excludes extras when disabled" {
 
     // Order: shell, file_read, file_write, file_edit, git, image_info,
     //        memory_store, memory_recall, memory_list, memory_forget,
-    //        delegate, schedule, spawn = 13
-    try std.testing.expectEqual(@as(usize, 13), tools.len);
+    //        delegate, schedule, spawn, message = 14
+    try std.testing.expectEqual(@as(usize, 14), tools.len);
 }
 
 test "all tools wires http and web_search config into tool instances" {
