@@ -674,6 +674,12 @@ fn findShellTool(self: anytype) ?Tool {
 fn clearSessionState(self: anytype) void {
     self.clearHistory();
     clearPendingExecCommand(self);
+    if (@hasField(@TypeOf(self.*), "total_tokens")) {
+        self.total_tokens = 0;
+    }
+    if (@hasField(@TypeOf(self.*), "last_turn_usage")) {
+        self.last_turn_usage = .{};
+    }
 
     if (self.session_store) |store| {
         store.clearAutoSaved(self.memory_session_id) catch {};

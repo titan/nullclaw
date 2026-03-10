@@ -3365,6 +3365,8 @@ test "slash /new clears history" {
         .content = try allocator.dupe(u8, "hello"),
     });
     agent.has_system_prompt = true;
+    agent.total_tokens = 42;
+    agent.last_turn_usage = .{ .prompt_tokens = 10, .completion_tokens = 5, .total_tokens = 15 };
 
     const response = (try agent.handleSlashCommand("/new")).?;
     defer allocator.free(response);
@@ -3372,6 +3374,8 @@ test "slash /new clears history" {
     try std.testing.expectEqualStrings("Session cleared.", response);
     try std.testing.expectEqual(@as(usize, 0), agent.historyLen());
     try std.testing.expect(!agent.has_system_prompt);
+    try std.testing.expectEqual(@as(u64, 0), agent.total_tokens);
+    try std.testing.expectEqual(@as(u32, 0), agent.last_turn_usage.total_tokens);
 }
 
 test "slash /reset clears history and switches model" {
@@ -4214,6 +4218,8 @@ test "slash /restart clears runtime command settings" {
     defer allocator.free(usage_resp);
     const tts_resp = (try agent.handleSlashCommand("/tts always provider test-provider")).?;
     defer allocator.free(tts_resp);
+    agent.total_tokens = 42;
+    agent.last_turn_usage = .{ .prompt_tokens = 7, .completion_tokens = 5, .total_tokens = 12 };
 
     const response = (try agent.handleSlashCommand("/restart")).?;
     defer allocator.free(response);
@@ -4224,6 +4230,8 @@ test "slash /restart clears runtime command settings" {
     try std.testing.expect(agent.usage_mode == .off);
     try std.testing.expect(agent.tts_mode == .off);
     try std.testing.expect(agent.tts_provider == null);
+    try std.testing.expectEqual(@as(u64, 0), agent.total_tokens);
+    try std.testing.expectEqual(@as(u32, 0), agent.last_turn_usage.total_tokens);
 }
 
 test "turn includes reasoning and usage footer when enabled" {

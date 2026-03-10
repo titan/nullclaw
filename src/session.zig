@@ -1534,6 +1534,62 @@ test "restored session token reconstruction stays aligned across response cache 
     try testing.expectEqual(@as(u64, expected_tokens), restored_session.agent.total_tokens);
 }
 
+test "processMessage /new resets token usage before later persistence and reload" {
+    var mock = MockProvider{ .response = "ok" };
+    const cfg = testConfig();
+
+    var sqlite_mem = try memory_mod.SqliteMemory.init(testing.allocator, ":memory:");
+    defer sqlite_mem.deinit();
+
+    var noop = observability.NoopObserver{};
+    var sm = SessionManager.init(
+        testing.allocator,
+        &cfg,
+        mock.provider(),
+        &.{},
+        sqlite_mem.memory(),
+        noop.observer(),
+        sqlite_mem.sessionStore(),
+        null,
+    );
+    defer sm.deinit();
+
+    const session_key = "telegram:main:chat-reset-usage";
+
+    const first = try sm.processMessage(session_key, "before reset", .{
+        .channel = "telegram",
+        .is_group = false,
+        .group_id = null,
+    });
+    defer testing.allocator.free(first);
+
+    const token_cost = @as(u64, agent_mod.estimate_text_tokens("ok"));
+    const session = try sm.getOrCreate(session_key);
+    try testing.expectEqual(token_cost, session.agent.total_tokens);
+
+    const reset_reply = try sm.processMessage(session_key, "/new", .{
+        .channel = "telegram",
+        .is_group = false,
+        .group_id = null,
+    });
+    defer testing.allocator.free(reset_reply);
+    try testing.expectEqual(token_cost, session.agent.total_tokens);
+
+    const after_reset = try sm.processMessage(session_key, "after reset", .{
+        .channel = "telegram",
+        .is_group = false,
+        .group_id = null,
+    });
+    defer testing.allocator.free(after_reset);
+    try testing.expectEqual(token_cost * 2, session.agent.total_tokens);
+
+    session.last_active = 0;
+    try testing.expectEqual(@as(usize, 1), sm.evictIdle(1));
+
+    const restored = try sm.getOrCreate(session_key);
+    try testing.expectEqual(token_cost * 2, restored.agent.total_tokens);
+}
+
 test "processMessage different keys — independent sessions" {
     var mock = MockProvider{ .response = "ok" };
     const cfg = testConfig();
