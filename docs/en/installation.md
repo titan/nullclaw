@@ -59,10 +59,9 @@ Build output:
 
 ## Option 3: Android / Termux
 
-NullClaw does not currently publish official pre-built Android / Termux binaries.
+There are three different paths:
 
-There are two different paths:
-
+- download an official pre-built Android / Termux binary from releases
 - build directly inside Termux on the Android device
 - cross-compile an Android binary from another machine
 
