@@ -655,6 +655,17 @@ pub const OpenAiCompatibleProvider = struct {
         if (parsed.value != .object) return error.NoResponseContent;
 
         const root_obj = parsed.value.object;
+
+        if (error_classify.classifyKnownApiError(root_obj)) |kind| {
+            const mapped_err = error_classify.kindToError(kind);
+            var summary_buf: [1024]u8 = undefined;
+            const summary = error_classify.summarizeKnownApiError(root_obj, &summary_buf) orelse @errorName(mapped_err);
+            const sanitized = root.sanitizeApiError(allocator, summary) catch null;
+            defer if (sanitized) |s| allocator.free(s);
+            root.setLastApiErrorDetail("compatible", sanitized orelse summary);
+            return mapped_err;
+        }
+
         const content = try extractResponsesOutputText(allocator, root_obj);
         errdefer if (content) |text| allocator.free(text);
 
@@ -2316,6 +2327,14 @@ test "parseResponsesResponse extracts function call and text" {
     try std.testing.expectEqual(@as(u32, 5), result.usage.completion_tokens);
     try std.testing.expectEqual(@as(u32, 15), result.usage.total_tokens);
     try std.testing.expectEqualStrings("gpt-5.4", result.model);
+}
+
+test "parseResponsesResponse maps generic error envelope" {
+    const body =
+        \\{"error":{"message":"An error occurred while processing your request."}}
+    ;
+
+    try std.testing.expectError(error.ApiError, OpenAiCompatibleProvider.parseResponsesResponse(std.testing.allocator, body));
 }
 
 test "AuthStyle custom headerName fallback" {
