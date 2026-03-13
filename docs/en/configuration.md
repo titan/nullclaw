@@ -352,6 +352,52 @@ Recommended defaults:
 
 Avoid direct public exposure. Use tunnel when external access is required.
 
+### `tunnel`
+
+Tunnel providers for exposing the gateway to the public internet. Required for webhook-based channels when running without a public IP.
+
+**Providers:**
+
+| Provider | Description |
+|----------|-------------|
+| `none` | No tunnel (default) |
+| `cloudflare` | Cloudflare Tunnel |
+| `ngrok` | ngrok tunnel |
+| `tailscale` | Tailscale Funnel |
+| `custom` | Custom tunnel command |
+
+**Example: ngrok**
+
+```json
+{
+  "tunnel": {
+    "provider": "ngrok",
+    "ngrok": {
+      "auth_token": "YOUR_NGROK_AUTH_TOKEN",
+      "domain": "your-domain.ngrok-free.app"
+    }
+  }
+}
+```
+
+**Example: Cloudflare**
+
+```json
+{
+  "tunnel": {
+    "provider": "cloudflare",
+    "cloudflare": {
+      "token": "YOUR_CLOUDFLARE_TUNNEL_TOKEN"
+    }
+  }
+}
+```
+
+**Notes:**
+
+- Tunnel starts before gateway.
+- Public URL is printed on startup and written to `daemon_state.json`.
+
 ### `autonomy`
 
 - `level`: start with `supervised`.

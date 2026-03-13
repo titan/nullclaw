@@ -185,6 +185,52 @@ Telegram 示例：
   - `require_pairing = true`
 - 不建议直接公网监听；如需外网访问，优先使用 tunnel。
 
+### `tunnel`
+
+隧道提供者，用于将网关暴露到公网。在没有公网 IP 的情况下运行基于 webhook 的频道时需要。
+
+**提供者：**
+
+| 提供者 | 描述 |
+|--------|------|
+| `none` | 无隧道（默认） |
+| `cloudflare` | Cloudflare Tunnel |
+| `ngrok` | ngrok 隧道 |
+| `tailscale` | Tailscale Funnel |
+| `custom` | 自定义隧道命令 |
+
+**示例：ngrok**
+
+```json
+{
+  "tunnel": {
+    "provider": "ngrok",
+    "ngrok": {
+      "auth_token": "YOUR_NGROK_AUTH_TOKEN",
+      "domain": "your-domain.ngrok-free.app"
+    }
+  }
+}
+```
+
+**示例：Cloudflare**
+
+```json
+{
+  "tunnel": {
+    "provider": "cloudflare",
+    "cloudflare": {
+      "token": "YOUR_CLOUDFLARE_TUNNEL_TOKEN"
+    }
+  }
+}
+```
+
+**注意事项：**
+
+- 隧道在网关之前启动。
+- 公网 URL 会在启动时打印，并写入 `daemon_state.json`。
+
 ### `autonomy`
 
 - `level`: 推荐先用 `supervised`。
