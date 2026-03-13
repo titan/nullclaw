@@ -195,20 +195,37 @@ pub const SessionManager = struct {
         errdefer if (!key_owned_by_session) self.allocator.free(owned_key);
 
         const session = try self.allocator.create(Session);
+        session.provider_holder = null;
+        session.owned_provider_api_key = null;
         var session_initialized = false;
         errdefer {
             if (session_initialized) session.deinit(self.allocator);
             self.allocator.destroy(session);
         }
+        errdefer if (!session_initialized) {
+            if (session.provider_holder) |*holder| holder.deinit();
+            if (session.owned_provider_api_key) |key| self.allocator.free(key);
+        };
 
         const agent_profile = findProfileForSessionKey(self.config, session_key);
         var provider_ctx = try self.resolveProviderForSession(agent_profile);
         errdefer provider_ctx.deinit(self.allocator);
 
+        session.* = undefined;
+        session.provider_holder = provider_ctx.holder;
+        session.owned_provider_api_key = provider_ctx.owned_api_key;
+        provider_ctx.holder = null;
+        provider_ctx.owned_api_key = null;
+
+        const session_provider = if (session.provider_holder) |*holder|
+            holder.provider()
+        else
+            provider_ctx.provider;
+
         var agent = try Agent.fromConfigWithProfile(
             self.allocator,
             self.config,
-            provider_ctx.provider,
+            session_provider,
             self.tools,
             self.mem,
             self.observer,
@@ -224,10 +241,12 @@ pub const SessionManager = struct {
             agent.usage_record_ctx = @ptrCast(self);
         }
 
+        const session_provider_holder = session.provider_holder;
+        const session_owned_provider_api_key = session.owned_provider_api_key;
         session.* = .{
             .agent = agent,
-            .provider_holder = provider_ctx.holder,
-            .owned_provider_api_key = provider_ctx.owned_api_key,
+            .provider_holder = session_provider_holder,
+            .owned_provider_api_key = session_owned_provider_api_key,
             .created_at = std.time.timestamp(),
             .last_active = std.time.timestamp(),
             .last_consolidated = 0,
@@ -238,8 +257,6 @@ pub const SessionManager = struct {
         };
         key_owned_by_session = true;
         session_initialized = true;
-        provider_ctx.holder = null;
-        provider_ctx.owned_api_key = null;
 
         // Restore persisted conversation history from session store
         if (self.session_store) |store| {
@@ -1360,6 +1377,30 @@ test "getOrCreate applies named agent profile from routed session key" {
     try testing.expectEqualStrings("ollama", session.agent.default_provider);
     try testing.expectApproxEqAbs(@as(f64, 0.25), session.agent.temperature, 0.000001);
     try testing.expectEqual(@as(usize, 0), session.agent.model_routes.len);
+}
+
+test "getOrCreate stores named agent provider interface from session-owned holder" {
+    var mock = MockProvider{ .response = "ok" };
+    var cfg = testConfig();
+    cfg.default_provider = "openrouter";
+    cfg.agents = &.{
+        .{
+            .name = "Coder Agent",
+            .provider = "ollama",
+            .model = "qwen2.5-coder:14b",
+        },
+    };
+
+    var sm = testSessionManager(testing.allocator, &mock, &cfg);
+    defer sm.deinit();
+
+    const session = try sm.getOrCreate("agent:coder-agent:telegram:group:-100123");
+    try testing.expect(session.provider_holder != null);
+
+    var holder = &session.provider_holder.?;
+    const holder_provider = holder.provider();
+    try testing.expect(session.agent.provider.ptr == holder_provider.ptr);
+    try testing.expect(session.agent.provider.vtable == holder_provider.vtable);
 }
 
 test "getOrCreate falls back to default config for unknown routed agent id" {
