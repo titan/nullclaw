@@ -89,8 +89,12 @@ pub fn parseAssistantChoices(allocator: std.mem.Allocator, text: []const u8) !Pa
     };
 }
 
+fn isValidChoiceCallbackToken(token: []const u8) bool {
+    return token.len > 0 and std.mem.indexOfScalar(u8, token, ':') == null;
+}
+
 fn choiceCallbackDataLen(token: []const u8, option_id: []const u8) !usize {
-    if (token.len == 0) return error.InvalidCallbackData;
+    if (!isValidChoiceCallbackToken(token)) return error.InvalidCallbackData;
     if (!isValidChoiceId(option_id)) return error.InvalidCallbackData;
     return CALLBACK_PREFIX.len + token.len + 1 + option_id.len;
 }
@@ -137,7 +141,7 @@ pub fn parseChoiceCallbackData(data: []const u8) ?ChoiceCallbackData {
     if (sep == 0 or sep + 1 >= rest.len) return null;
     const token = rest[0..sep];
     const option_id = rest[sep + 1 ..];
-    if (token.len == 0) return null;
+    if (!isValidChoiceCallbackToken(token)) return null;
     if (!isValidChoiceId(option_id)) return null;
     return .{
         .token = token,
@@ -372,8 +376,17 @@ test "choices callback data rejects long payload" {
     try std.testing.expectError(error.CallbackDataTooLong, buildChoiceCallbackData(allocator, long_token, "yes", 64));
 }
 
+test "choices callback data rejects token separator" {
+    const allocator = std.testing.allocator;
+    var buf: [64]u8 = undefined;
+
+    try std.testing.expectError(error.InvalidCallbackData, formatChoiceCallbackData(&buf, "tok:1", "yes", 64));
+    try std.testing.expectError(error.InvalidCallbackData, buildChoiceCallbackData(allocator, "tok:1", "yes", 64));
+}
+
 test "choices parse callback data rejects malformed payload" {
     try std.testing.expect(parseChoiceCallbackData("nc1:tok") == null);
     try std.testing.expect(parseChoiceCallbackData("bad:tok:yes") == null);
+    try std.testing.expect(parseChoiceCallbackData("nc1:tok:extra:yes") == null);
     try std.testing.expect(parseChoiceCallbackData("nc1:tok:YES") == null);
 }
