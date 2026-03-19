@@ -133,6 +133,7 @@ pub const PairingGuard = struct {
         return self.paired_tokens.count() > 0;
     }
 
+
     /// Attempt to pair with the given code. Returns a bearer token on success.
     /// Returns error.LockedOut if locked out due to brute force.
     /// Returns null if code is incorrect.

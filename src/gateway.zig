@@ -4438,7 +4438,20 @@ pub fn run(allocator: std.mem.Allocator, host: []const u8, port: u16, config_ptr
             const auth_header = extractHeader(raw, "Authorization");
             const bearer = if (auth_header) |ah| extractBearerToken(ah) else null;
             const pairing_guard = if (state.pairing_guard) |*guard| guard else null;
-            const cron_authorized = if (pairing_guard) |g| (if (!g.requirePairing() or !g.hasPairedTokens()) true else isWebhookAuthorized(pairing_guard, bearer)) else true;
+            // Auth for /cron:
+            // - No pairing guard → allow (pairing not configured)
+            // - Pairing disabled → allow
+            // - Pairing required, no tokens yet → deny (fall back to disk; no safe credential exists)
+            // - Pairing required, tokens exist → require valid bearer token
+            const cron_authorized = if (pairing_guard) |g|
+                if (!g.requirePairing())
+                    true
+                else if (!g.hasPairedTokens())
+                    false // bootstrap phase: deny, CLI falls back to disk
+                else
+                    isWebhookAuthorized(pairing_guard, bearer)
+            else
+                true;
             if (!cron_authorized) {
                 response_status = "401 Unauthorized";
                 response_body = "{\"error\":\"unauthorized\"}";
