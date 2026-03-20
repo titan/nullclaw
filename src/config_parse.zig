@@ -977,6 +977,27 @@ pub fn parseJson(self: *Config, content: []const u8) !void {
                     self.diagnostics.token_usage_ledger_max_lines = @intCast(v.integer);
                 }
             }
+            if (diag.object.get("otel_endpoint")) |v| {
+                if (v == .string) self.diagnostics.otel_endpoint = try self.allocator.dupe(u8, v.string);
+            }
+            if (diag.object.get("otel_service_name")) |v| {
+                if (v == .string) self.diagnostics.otel_service_name = try self.allocator.dupe(u8, v.string);
+            }
+            if (diag.object.get("otel_headers")) |h| {
+                if (h == .object) {
+                    var header_list: std.ArrayListUnmanaged(types.DiagnosticsConfig.OtelHeaderEntry) = .empty;
+                    var hit = h.object.iterator();
+                    while (hit.next()) |he| {
+                        if (he.value_ptr.* == .string) {
+                            try header_list.append(self.allocator, .{
+                                .key = try self.allocator.dupe(u8, he.key_ptr.*),
+                                .value = try self.allocator.dupe(u8, he.value_ptr.string),
+                            });
+                        }
+                    }
+                    self.diagnostics.otel_headers = try header_list.toOwnedSlice(self.allocator);
+                }
+            }
             if (diag.object.get("otel")) |otel| {
                 if (otel == .object) {
                     if (otel.object.get("endpoint")) |v| {
