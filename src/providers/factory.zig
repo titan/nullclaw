@@ -361,7 +361,7 @@ pub const ProviderHolder = union(enum) {
             .gemini_provider => .{ .gemini = gemini.GeminiProvider.init(allocator, api_key) },
             .vertex_provider => .{ .vertex = vertex.VertexProvider.init(allocator, api_key, base_url) },
             .ollama_provider => blk: {
-                var prov = ollama.OllamaProvider.init(allocator, base_url);
+                var prov = ollama.OllamaProvider.init(allocator, base_url, api_key);
                 prov.native_tools = native_tools;
                 break :blk .{ .ollama = prov };
             },
@@ -783,6 +783,15 @@ test "fromConfig applies native_tools override for ollama" {
     defer h.deinit();
     try std.testing.expect(h == .ollama);
     try std.testing.expect(!h.provider().supportsNativeTools());
+}
+
+test "fromConfig passes api_key through to ollama" {
+    const alloc = std.testing.allocator;
+    var h = ProviderHolder.fromConfig(alloc, "ollama", "ollama-key", "https://api.ollama.example", true, null, null);
+    defer h.deinit();
+    try std.testing.expect(h == .ollama);
+    try std.testing.expectEqualStrings("ollama-key", h.ollama.api_key.?);
+    try std.testing.expectEqualStrings("https://api.ollama.example", h.ollama.base_url);
 }
 
 test "fromConfig applies max_tokens_non_streaming from table" {
